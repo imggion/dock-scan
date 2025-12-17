@@ -25,6 +25,13 @@ struct DockscanHomeView: View {
         return f
     }()
 
+    private let memoryFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useGB, .useMB]
+        f.countStyle = .memory
+        return f
+    }()
+
     enum NavSection: String, CaseIterable, Identifiable, Hashable {
         case containers
         case stacks
@@ -77,13 +84,92 @@ struct DockscanHomeView: View {
 
                 Divider()
 
-                HStack(spacing: 8) {
-                    Image(systemName: dockerService.backend == .unavailable ? "externaldrive.badge.xmark" : "externaldrive.connected.to.line.below")
-                        .foregroundStyle(.secondary)
-                    Text(dockerService.backend.displayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: dockerService.backend == .unavailable ? "externaldrive.badge.xmark" : "externaldrive.connected.to.line.below")
+                            .foregroundStyle(.secondary)
+                        Text(dockerService.backend.displayName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if dockerService.isLoadingSocketInfo {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Sock Info")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        if dockerService.backend == .unavailable {
+                            Text("—")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else if let info = dockerService.socketInfo {
+                            HStack {
+                                Text("VM engine")
+                                Spacer()
+                                Text(info.vmEngine)
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                            if let arch = info.arch, !arch.isEmpty {
+                                HStack {
+                                    Text("Arch")
+                                    Spacer()
+                                    Text(arch)
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if let runtime = info.runtime, !runtime.isEmpty {
+                                HStack {
+                                    Text("Runtime")
+                                    Spacer()
+                                    Text(runtime)
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if let mountType = info.mountType, !mountType.isEmpty {
+                                HStack {
+                                    Text("Mount")
+                                    Spacer()
+                                    Text(mountType)
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if let max = info.memoryMaxBytes {
+                                HStack {
+                                    Text("Mem max")
+                                    Spacer()
+                                    Text(memoryFormatter.string(fromByteCount: max))
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                            if let allocated = info.memoryAllocatedBytes {
+                                HStack {
+                                    Text("Mem allocata")
+                                    Spacer()
+                                    Text(memoryFormatter.string(fromByteCount: allocated))
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("Caricamento…")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -149,6 +235,9 @@ struct DockscanHomeView: View {
         }
         .task {
             await refresh(initial: true)
+        }
+        .task(id: dockerService.backend) {
+            await dockerService.fetchSocketInfo()
         }
     }
 
@@ -645,6 +734,10 @@ struct DockscanHomeView: View {
         case .networks:
             await dockerService.fetchNetworks()
         }
+
+        if initial {
+            await dockerService.fetchSocketInfo()
+        }
     }
 
     @ViewBuilder
@@ -655,6 +748,11 @@ struct DockscanHomeView: View {
         } else {
             Button("Start") { Task { await dockerService.startContainer(id: container.id) } }
         }
+        Divider()
+        Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: container.id) } }
+            .disabled(!container.isRunning)
+        Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
+            .disabled(!container.isRunning)
         Divider()
         Button("Logs") { logsSheetContainer = LogsSheetItem(id: container.id) }
             .disabled(!container.isRunning)
@@ -807,6 +905,10 @@ private struct StackDetailView: View {
                                 Button("Start") { Task { await dockerService.startContainer(id: container.id) } }
                             }
                         }
+                        Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: container.id) } }
+                            .disabled(!container.isRunning)
+                        Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
+                            .disabled(!container.isRunning)
                         Divider()
                         Button("Apri Dettagli") { onSelectContainer(container.id) }
                     }
@@ -879,6 +981,10 @@ private struct ContainerLogsSheet: View {
                 Toggle("Auto-scroll", isOn: $autoScroll)
                     .toggleStyle(.switch)
                     .controlSize(.small)
+                Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: containerID) } }
+                    .disabled(isStreaming)
+                Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: containerID) } }
+                    .disabled(isStreaming)
                 Button("Pulisci") { clear() }
             }
 

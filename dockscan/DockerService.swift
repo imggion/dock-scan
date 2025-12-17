@@ -5,6 +5,9 @@
 import Foundation
 import Combine
 import Darwin
+#if os(macOS)
+import AppKit
+#endif
 
 // Enum for backend types
 public enum DockerBackend: String, CaseIterable, Identifiable {
@@ -356,6 +359,8 @@ public final class DockerService: ObservableObject {
     @Published public private(set) var images: [DockerImage] = []
     @Published public private(set) var networks: [DockerNetwork] = []
     @Published public private(set) var errorMessage: String? = nil
+    @Published public private(set) var socketInfo: DockerSocketInfo? = nil
+    @Published public private(set) var isLoadingSocketInfo: Bool = false
 
     private var resolvedSocketPath: String? = nil
     private var customSocketPath: String? = UserDefaults.standard.string(forKey: "Dockscan.CustomSocketPath")
@@ -915,6 +920,158 @@ public final class DockerService: ObservableObject {
         }
     }
 
+    public struct DockerSocketInfo: Hashable {
+        public let vmEngine: String
+        public let memoryMaxBytes: Int64?
+        public let memoryAllocatedBytes: Int64?
+        public let arch: String?
+        public let runtime: String?
+        public let mountType: String?
+        public let operatingSystem: String?
+        public let serverVersion: String?
+    }
+
+    public func fetchSocketInfo() async {
+        await resolveBackend()
+        guard resolvedSocketPath != nil, backend != .unavailable else {
+            await MainActor.run {
+                socketInfo = nil
+                isLoadingSocketInfo = false
+            }
+            return
+        }
+
+        await MainActor.run { isLoadingSocketInfo = true }
+        defer { Task { @MainActor in isLoadingSocketInfo = false } }
+
+        do {
+            async let infoResult = httpRequestViaUnixSocket(method: "GET", endpoint: "/info")
+            async let versionResult = httpRequestViaUnixSocket(method: "GET", endpoint: "/version")
+
+            let (infoData, infoStatus) = try await infoResult
+            let (versionData, versionStatus) = try await versionResult
+
+            let decoder = JSONDecoder()
+            let info: DockerInfoAPI? = (infoStatus < 400) ? (try? decoder.decode(DockerInfoAPI.self, from: infoData)) : nil
+            let version: DockerVersionAPI? = (versionStatus < 400) ? (try? decoder.decode(DockerVersionAPI.self, from: versionData)) : nil
+
+            var memAllocated = info?.MemTotal
+            var memMax: Int64? = nil
+            var vmEngine = Self.defaultVMEngineLabel(backend: backend, operatingSystem: info?.OperatingSystem, socketPath: socketPath)
+            var arch: String? = info?.Architecture
+            var runtime: String? = nil
+            var mountType: String? = nil
+
+#if os(macOS)
+            if backend == .colima {
+                if let colima = try? await fetchColimaStatus() {
+                    if let vmType = colima.vmType, !vmType.isEmpty {
+                        vmEngine = "Colima (\(vmType))"
+                    } else {
+                        vmEngine = "Colima"
+                    }
+                    if let memoryGiB = colima.memory {
+                        memMax = Int64(memoryGiB) * 1024 * 1024 * 1024
+                    }
+                    if let colimaArch = colima.arch, !colimaArch.isEmpty {
+                        arch = colimaArch
+                    }
+                    if let colimaRuntime = colima.runtime, !colimaRuntime.isEmpty {
+                        runtime = colimaRuntime
+                    }
+                    if let colimaMountType = colima.mountType, !colimaMountType.isEmpty {
+                        mountType = colimaMountType
+                    }
+                }
+            }
+#endif
+
+            if runtime == nil {
+                switch backend {
+                case .unavailable:
+                    runtime = nil
+                default:
+                    runtime = "docker"
+                }
+            }
+
+            if memMax == nil { memMax = memAllocated }
+
+            let value = DockerSocketInfo(
+                vmEngine: vmEngine,
+                memoryMaxBytes: memMax,
+                memoryAllocatedBytes: memAllocated,
+                arch: arch,
+                runtime: runtime,
+                mountType: mountType,
+                operatingSystem: info?.OperatingSystem,
+                serverVersion: version?.Version
+            )
+
+            await MainActor.run { socketInfo = value }
+        } catch {
+            await MainActor.run {
+                socketInfo = nil
+                setError(error)
+            }
+        }
+    }
+
+    private static func defaultVMEngineLabel(backend: DockerBackend, operatingSystem: String?, socketPath: String?) -> String {
+        switch backend {
+        case .colima:
+            return "Colima"
+        case .docker:
+            if (operatingSystem ?? "").localizedCaseInsensitiveContains("Docker Desktop") { return "Docker Desktop" }
+            return "Docker Engine"
+        case .custom:
+            if (operatingSystem ?? "").localizedCaseInsensitiveContains("Docker Desktop") { return "Docker Desktop" }
+            return "Custom socket"
+        case .unavailable:
+            return "—"
+        }
+    }
+
+    private struct DockerInfoAPI: Decodable {
+        let MemTotal: Int64?
+        let OperatingSystem: String?
+        let KernelVersion: String?
+        let Architecture: String?
+    }
+
+    private struct DockerVersionAPI: Decodable {
+        let Version: String?
+    }
+
+#if os(macOS)
+    private struct ColimaStatusAPI: Decodable {
+        let vmType: String?
+        let memory: Int?
+        let arch: String?
+        let runtime: String?
+        let mountType: String?
+    }
+
+    private func fetchColimaStatus() async throws -> ColimaStatusAPI {
+        try await Task.detached(priority: .utility) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["colima", "status", "--json"]
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+
+            try process.run()
+            process.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let decoder = JSONDecoder()
+            return try decoder.decode(ColimaStatusAPI.self, from: data)
+        }.value
+    }
+#endif
+
     public func fetchContainerDetails(id: String) async throws -> DockerContainerDetails {
         guard await ensureBackendOrFail() else {
             throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend non disponibile"])
@@ -1241,4 +1398,92 @@ public final class DockerService: ObservableObject {
             self.errorMessage = (error as NSError).localizedDescription
         }
     }
+
+#if os(macOS)
+    @MainActor
+    public func openContainerShellInTerminal(id: String) async {
+        await resolveBackend()
+        guard let socket = resolvedSocketPath else {
+            setErrorMessage("Socket Docker non disponibile")
+            return
+        }
+
+        let dockerHost = "unix://\(socket)"
+        let safeID = id.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
+        guard !safeID.isEmpty else {
+            setErrorMessage("ID container non valido")
+            return
+        }
+
+        let script = """
+        #!/bin/zsh
+        export DOCKER_HOST="\(dockerHost)"
+        export TERM="xterm-256color"
+
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "docker CLI not found in PATH"
+          echo "Install Docker Desktop or docker CLI, then retry."
+          echo
+          read -r -n 1 -s -p "Press any key to close..."
+          echo
+          exit 1
+        fi
+
+        docker exec -it \(safeID) /bin/bash || docker exec -it \(safeID) /bin/sh || docker exec -it \(safeID) sh
+        """
+
+        openTerminalScript(name: "shell-\(safeID.prefix(12))", script: script)
+    }
+
+    @MainActor
+    public func openContainerAttachInTerminal(id: String) async {
+        await resolveBackend()
+        guard let socket = resolvedSocketPath else {
+            setErrorMessage("Socket Docker non disponibile")
+            return
+        }
+
+        let dockerHost = "unix://\(socket)"
+        let safeID = id.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
+        guard !safeID.isEmpty else {
+            setErrorMessage("ID container non valido")
+            return
+        }
+
+        let script = """
+        #!/bin/zsh
+        export DOCKER_HOST="\(dockerHost)"
+        export TERM="xterm-256color"
+
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "docker CLI not found in PATH"
+          echo "Install Docker Desktop or docker CLI, then retry."
+          echo
+          read -r -n 1 -s -p "Press any key to close..."
+          echo
+          exit 1
+        fi
+
+        echo "Attaching to container: \(safeID)"
+        echo "Detach with: Ctrl-p Ctrl-q"
+        echo
+        docker attach \(safeID)
+        """
+
+        openTerminalScript(name: "attach-\(safeID.prefix(12))", script: script)
+    }
+
+    @MainActor
+    private func openTerminalScript(name: String, script: String) {
+        do {
+            let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            let fileURL = tempDir.appendingPathComponent("dockscan-\(name).command")
+            try script.write(to: fileURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fileURL.path)
+            NSWorkspace.shared.open(fileURL)
+        } catch {
+            setErrorMessage("Apri terminale fallito: \((error as NSError).localizedDescription)")
+        }
+    }
+#endif
 }

@@ -70,6 +70,11 @@ struct ContainersView: View {
                                 Button("Start") { Task { await dockerService.startContainer(id: container.id) } }
                             }
                             Divider()
+                            Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: container.id) } }
+                                .disabled(!container.isRunning)
+                            Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
+                                .disabled(!container.isRunning)
+                            Divider()
                             Button("Rimuovi", role: .destructive) {
                                 Task { await dockerService.removeContainer(id: container.id, force: true) }
                             }
@@ -179,6 +184,16 @@ struct ContainerDetailView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: 360)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Menu("Terminale") {
+                    Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: container.id) } }
+                    Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
+                    Divider()
+                    Text("Detach: Ctrl-p Ctrl-q")
+                }
+                .disabled(!currentContainer.isRunning)
             }
         }
         .task(id: container.id) {
