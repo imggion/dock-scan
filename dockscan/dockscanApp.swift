@@ -6,27 +6,24 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct dockscanApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @StateObject private var dockerService = DockerService()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(dockerService)
         }
-        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 1400, height: 860)
+
+#if os(macOS)
+        MenuBarExtra("Dockscan", systemImage: "cube.transparent") {
+            MenuBarView()
+                .environmentObject(dockerService)
+        }
+        .menuBarExtraStyle(.window)
+#endif
     }
 }

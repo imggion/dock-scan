@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Build products
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/
+
+# Dependency managers
+Carthage/Build/
+Pods/
+
+# Tooling
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
