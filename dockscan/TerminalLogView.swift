@@ -12,13 +12,16 @@ final class TerminalLogBuffer: ObservableObject {
         self.maxChars = maxChars
     }
 
+    var isEmpty: Bool { attributedText.length == 0 }
+    var length: Int { attributedText.length }
+
     func clear() {
         attributedText = NSMutableAttributedString()
         objectWillChange.send()
     }
 
-    func append(service: String, line: String) {
-        let attributedLine = TerminalLogHighlighter.render(service: service, line: line)
+    func append(service: String, line: String, showPrefix: Bool = true) {
+        let attributedLine = TerminalLogHighlighter.render(service: service, line: line, showPrefix: showPrefix)
         attributedText.append(attributedLine)
 
         if attributedText.length > maxChars {
@@ -54,8 +57,8 @@ private enum TerminalLogHighlighter {
         options: []
     )
 
-    static func render(service: String, line: String) -> NSAttributedString {
-        let prefix = "[\(service)] "
+    static func render(service: String, line: String, showPrefix: Bool) -> NSAttributedString {
+        let prefix = showPrefix ? "[\(service)] " : ""
         let combined = prefix + line + "\n"
 
         let result = NSMutableAttributedString(
@@ -66,16 +69,19 @@ private enum TerminalLogHighlighter {
             ]
         )
 
-        let prefixRange = NSRange(location: 0, length: (prefix as NSString).length)
-        result.addAttributes(
-            [
-                .font: prefixFont,
-                .foregroundColor: color(forService: service)
-            ],
-            range: prefixRange
-        )
+        let prefixLength = (prefix as NSString).length
+        if showPrefix, prefixLength > 0 {
+            let prefixRange = NSRange(location: 0, length: prefixLength)
+            result.addAttributes(
+                [
+                    .font: prefixFont,
+                    .foregroundColor: color(forService: service)
+                ],
+                range: prefixRange
+            )
+        }
 
-        let messageStart = prefixRange.length
+        let messageStart = prefixLength
         let messageLength = (combined as NSString).length - messageStart
         guard messageLength > 0 else { return result }
         let messageRange = NSRange(location: messageStart, length: messageLength)

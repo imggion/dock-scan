@@ -129,10 +129,11 @@ struct ContainerDetailView: View {
     @Environment(\.dockscanNavigate) private var navigate
     let container: DockerContainer
     @State private var details: DockerContainerDetails?
-    @State private var logs: String = ""
-    @State private var pendingLogs: String = ""
     @State private var flushTask: Task<Void, Never>?
-    @State private var refreshToken: Int = 0
+    @State private var partialLine: String = ""
+    @State private var pendingLines: [String] = []
+    @StateObject private var buffer = TerminalLogBuffer(maxChars: 250_000)
+    @State private var autoScroll = true
     @State private var selectedTab: Tab = .info
     @State private var isLoadingDetails = false
     @State private var isStreamingLogs = false
@@ -315,21 +316,25 @@ struct ContainerDetailView: View {
 
             if !currentContainer.isRunning {
                 ContentUnavailableView("Container non in running", systemImage: "stop.circle", description: Text("Avvia il container per leggere i log."))
-            } else if logs.isEmpty, isStreamingLogs {
+            } else if buffer.isEmpty, isStreamingLogs {
                 ProgressView()
-            } else if logs.isEmpty {
+            } else if buffer.isEmpty {
                 ContentUnavailableView("Nessun log", systemImage: "doc.text", description: Text("In attesa di output dal container."))
             } else {
-                ScrollView {
-                    Text(logs)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(.vertical, 4)
-                        .id(refreshToken)
+                HStack {
+                    Toggle("Auto-scroll", isOn: $autoScroll)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                    Button("Pulisci") { clearLogs() }
                 }
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                TerminalLogTextView(buffer: buffer, autoScroll: $autoScroll)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(.quaternary, lineWidth: 1)
+                    )
             }
             Spacer()
         }
@@ -356,9 +361,7 @@ struct ContainerDetailView: View {
     @MainActor
     private func startLogsStream() {
         stopLogsStream()
-        logs = ""
-        pendingLogs = ""
-        refreshToken &+= 1
+        clearLogs()
         isStreamingLogs = true
 
         logsStreamTask = Task {
@@ -376,12 +379,12 @@ struct ContainerDetailView: View {
                                 didReceive = true
                                 isStreamingLogs = false
                             }
-                            appendLogs(chunk)
+                            append(chunk)
                         }
                     }
 
                     await MainActor.run {
-                        if logs.isEmpty {
+                        if buffer.isEmpty {
                             isStreamingLogs = false
                         }
                     }
@@ -410,9 +413,7 @@ struct ContainerDetailView: View {
 
     @MainActor
     private func appendLogs(_ chunk: String) {
-        guard !chunk.isEmpty else { return }
-        pendingLogs.append(chunk)
-        scheduleFlush()
+        append(chunk)
     }
 
     @MainActor
@@ -422,16 +423,40 @@ struct ContainerDetailView: View {
             try? await Task.sleep(nanoseconds: 150_000_000)
             await MainActor.run {
                 flushTask = nil
-                if !pendingLogs.isEmpty {
-                    logs.append(pendingLogs)
-                    pendingLogs = ""
-                    if logs.count > 250_000 {
-                        logs = String(logs.suffix(200_000))
+                if !pendingLines.isEmpty {
+                    let batch = pendingLines
+                    pendingLines = []
+                    for line in batch {
+                        buffer.append(service: "", line: line, showPrefix: false)
                     }
-                    refreshToken &+= 1
                 }
             }
         }
+    }
+
+    @MainActor
+    private func clearLogs() {
+        buffer.clear()
+        pendingLines = []
+        partialLine = ""
+    }
+
+    @MainActor
+    private func append(_ chunk: String) {
+        guard !chunk.isEmpty else { return }
+        let combined = partialLine + chunk
+        let endsWithNewline = combined.hasSuffix("\n")
+        let parts = combined.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        var completeLines = parts
+        if !endsWithNewline, let last = completeLines.popLast() {
+            partialLine = last
+        } else {
+            partialLine = ""
+        }
+
+        pendingLines.append(contentsOf: completeLines)
+        scheduleFlush()
     }
 }
 

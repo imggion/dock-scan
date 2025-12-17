@@ -15,6 +15,10 @@ A native macOS menu bar app to inspect and manage your local Docker environment 
 Development in progress.
 </p>
 
+<p align="center">
+  <img src="dock-scan-screen.png" alt="Dockscan screenshot" width="900">
+</p>
+
 ## Installation
 
 ### Build from source
@@ -39,4 +43,3 @@ PRs are welcome. If you change anything related to Docker socket detection or AP
 ## License
 
 MIT License - see [LICENSE.md](LICENSE.md).
-

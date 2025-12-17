@@ -97,13 +97,13 @@ struct DockscanHomeView: View {
                 .task(id: section) {
                     await refresh(initial: false)
                 }
-                .navigationSplitViewColumnWidth(min: 860, ideal: 1040, max: .infinity)
+                .navigationSplitViewColumnWidth(min: 520, ideal: 920, max: .infinity)
         } detail: {
             detailColumn
                 .navigationSplitViewColumnWidth(
-                    min: section == .stacks ? 600 : 420,
+                    min: section == .stacks ? 460 : 360,
                     ideal: section == .stacks ? 820 : 520,
-                    max: section == .stacks ? .infinity : 760
+                    max: section == .stacks ? .infinity : 900
                 )
         }
         .environment(
@@ -328,7 +328,6 @@ struct DockscanHomeView: View {
             }
         }
         .padding()
-        .frame(minWidth: 860)
     }
 
     private var stacksTable: some View {
@@ -391,7 +390,6 @@ struct DockscanHomeView: View {
             }
         }
         .padding()
-        .frame(minWidth: 860)
     }
 
     private var imagesTable: some View {
@@ -478,7 +476,6 @@ struct DockscanHomeView: View {
             }
         }
         .padding()
-        .frame(minWidth: 860)
     }
 
     private var volumesTable: some View {
@@ -554,7 +551,6 @@ struct DockscanHomeView: View {
             }
         }
         .padding()
-        .frame(minWidth: 860)
     }
 
     private var networksTable: some View {
@@ -630,7 +626,6 @@ struct DockscanHomeView: View {
             }
         }
         .padding()
-        .frame(minWidth: 860)
     }
 
     @MainActor
@@ -863,11 +858,13 @@ private struct ContainerLogsSheet: View {
     @State private var isStreaming = false
     @State private var streamTask: Task<Void, Never>?
     private let tail: Int = 500
-    @State private var logs: String = ""
-    @State private var pendingLogs: String = ""
     @State private var flushTask: Task<Void, Never>?
-    @State private var refreshToken: Int = 0
     @State private var error: String?
+    @State private var partialLine: String = ""
+    @State private var pendingLines: [String] = []
+
+    @StateObject private var buffer = TerminalLogBuffer(maxChars: 250_000)
+    @State private var autoScroll = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -879,6 +876,10 @@ private struct ContainerLogsSheet: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                Toggle("Auto-scroll", isOn: $autoScroll)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                Button("Pulisci") { clear() }
             }
 
             if let error {
@@ -887,15 +888,12 @@ private struct ContainerLogsSheet: View {
                     .font(.caption)
             }
 
-            ScrollView {
-                Text(logs.isEmpty ? "—" : logs)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .id(refreshToken)
-            }
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            TerminalLogTextView(buffer: buffer, autoScroll: $autoScroll)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.quaternary, lineWidth: 1)
+                )
         }
         .padding()
         .frame(minWidth: 760, minHeight: 520)
@@ -904,12 +902,17 @@ private struct ContainerLogsSheet: View {
     }
 
     @MainActor
+    private func clear() {
+        buffer.clear()
+        pendingLines = []
+        partialLine = ""
+    }
+
+    @MainActor
     private func startStreaming() {
         stopStreaming()
         error = nil
-        logs = ""
-        pendingLogs = ""
-        refreshToken &+= 1
+        clear()
         isStreaming = true
 
         streamTask = Task {
@@ -927,12 +930,12 @@ private struct ContainerLogsSheet: View {
                                 didReceive = true
                                 isStreaming = false
                             }
-                            appendLogs(chunk)
+                            append(chunk)
                         }
                     }
 
                     await MainActor.run {
-                        if logs.isEmpty {
+                        if buffer.isEmpty {
                             isStreaming = false
                         }
                     }
@@ -960,9 +963,20 @@ private struct ContainerLogsSheet: View {
     }
 
     @MainActor
-    private func appendLogs(_ chunk: String) {
+    private func append(_ chunk: String) {
         guard !chunk.isEmpty else { return }
-        pendingLogs.append(chunk)
+        let combined = partialLine + chunk
+        let endsWithNewline = combined.hasSuffix("\n")
+        let parts = combined.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        var completeLines = parts
+        if !endsWithNewline, let last = completeLines.popLast() {
+            partialLine = last
+        } else {
+            partialLine = ""
+        }
+
+        pendingLines.append(contentsOf: completeLines)
         scheduleFlush()
     }
 
@@ -973,13 +987,12 @@ private struct ContainerLogsSheet: View {
             try? await Task.sleep(nanoseconds: 150_000_000)
             await MainActor.run {
                 flushTask = nil
-                if !pendingLogs.isEmpty {
-                    logs.append(pendingLogs)
-                    pendingLogs = ""
-                    if logs.count > 250_000 {
-                        logs = String(logs.suffix(200_000))
+                if !pendingLines.isEmpty {
+                    let batch = pendingLines
+                    pendingLines = []
+                    for line in batch {
+                        buffer.append(service: "", line: line, showPrefix: false)
                     }
-                    refreshToken &+= 1
                 }
             }
         }
