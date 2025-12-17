@@ -7,7 +7,7 @@ struct ContainersView: View {
     @State private var isRefreshing = false
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "Tutti"
+        case all = "All"
         case running = "Running"
         case stopped = "Stopped"
 
@@ -30,15 +30,15 @@ struct ContainersView: View {
             List(selection: $selection) {
                 if dockerService.backend == .unavailable {
                     ContentUnavailableView(
-                        "Backend non disponibile",
+                        "Backend unavailable",
                         systemImage: "externaldrive.badge.xmark",
-                        description: Text("Avvia Docker Desktop o Colima e riprova.")
+                        description: Text("Start Docker Desktop or Colima and try again.")
                     )
                 } else if filteredContainers.isEmpty {
                     ContentUnavailableView(
-                        "Nessun container",
+                        "No containers",
                         systemImage: "square.stack.3d.up",
-                        description: Text("Tocca Aggiorna per recuperare i container.")
+                        description: Text("Press Refresh to fetch containers.")
                     )
                 } else {
                     ForEach(filteredContainers) { container in
@@ -75,7 +75,7 @@ struct ContainersView: View {
                             Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
                                 .disabled(!container.isRunning)
                             Divider()
-                            Button("Rimuovi", role: .destructive) {
+                            Button("Remove", role: .destructive) {
                                 Task { await dockerService.removeContainer(id: container.id, force: true) }
                             }
                         }
@@ -91,14 +91,14 @@ struct ContainersView: View {
                         if isRefreshing {
                             ProgressView()
                         } else {
-                            Label("Aggiorna", systemImage: "arrow.clockwise")
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
                     }
                     .disabled(isRefreshing)
                 }
 
                 ToolbarItem(placement: .automatic) {
-                    Picker("Filtro", selection: $filter) {
+                    Picker("Filter", selection: $filter) {
                         ForEach(Filter.allCases) { f in
                             Text(f.rawValue).tag(f)
                         }
@@ -115,7 +115,7 @@ struct ContainersView: View {
                let container = dockerService.containers.first(where: { $0.id == selection }) {
                 ContainerDetailView(container: container)
             } else {
-                ContentUnavailableView("Seleziona un container", systemImage: "square.stack.3d.up", description: nil)
+                ContentUnavailableView("Select a container", systemImage: "square.stack.3d.up", description: nil)
             }
         }
     }
@@ -176,7 +176,7 @@ struct ContainerDetailView: View {
         .navigationTitle(container.name)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("Sezione", selection: $selectedTab) {
+                Picker("Section", selection: $selectedTab) {
                     Text("Info").tag(Tab.info)
                     Text("Env").tag(Tab.env)
                     Text("Logs").tag(Tab.logs)
@@ -187,7 +187,7 @@ struct ContainerDetailView: View {
             }
 
             ToolbarItem(placement: .primaryAction) {
-                Menu("Terminale") {
+                Menu("Terminal") {
                     Button("Shell") { Task { await dockerService.openContainerShellInTerminal(id: container.id) } }
                     Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
                     Divider()
@@ -215,8 +215,8 @@ struct ContainerDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("Stato") { Text(container.status.isEmpty ? container.state : container.status) }
-                    LabeledContent("Immagine") {
+                    LabeledContent("Status") { Text(container.status.isEmpty ? container.state : container.status) }
+                    LabeledContent("Image") {
                         let imageName = details.flatMap { $0.image.isEmpty ? nil : $0.image } ?? currentContainer.image
                         Button(imageName) { navigate.showImage(imageName) }
                             .buttonStyle(.link)
@@ -225,7 +225,7 @@ struct ContainerDetailView: View {
                     LabeledContent("ID") { Text(container.id).textSelection(.enabled).font(.caption) }
                     if let details {
                         if !details.createdAt.isEmpty {
-                            LabeledContent("Creato") { Text(details.createdAt).font(.caption).textSelection(.enabled) }
+                            LabeledContent("Created") { Text(details.createdAt).font(.caption).textSelection(.enabled) }
                         }
                         if !details.command.isEmpty {
                             LabeledContent("Command") { Text(details.command).font(.caption).textSelection(.enabled) }
@@ -257,7 +257,7 @@ struct ContainerDetailView: View {
             }
 
             if !volumeMounts.isEmpty {
-                GroupBox("Volumi") {
+                GroupBox("Volumes") {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(volumeMounts) { mount in
                             VStack(alignment: .leading, spacing: 2) {
@@ -266,7 +266,7 @@ struct ContainerDetailView: View {
                                     .font(.headline)
 
                                 if !mount.destination.isEmpty {
-                                    Text("Dest: \(mount.destination)")
+                                    Text("Destination: \(mount.destination)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -316,7 +316,7 @@ struct ContainerDetailView: View {
                     }
                 }
             } else {
-                ContentUnavailableView("Nessuna variabile", systemImage: "terminal", description: Text("Env non disponibile o vuoto."))
+                ContentUnavailableView("No variables", systemImage: "terminal", description: Text("Env unavailable or empty."))
             }
         }
         .padding()
@@ -330,18 +330,18 @@ struct ContainerDetailView: View {
             }
 
             if !currentContainer.isRunning {
-                ContentUnavailableView("Container non in running", systemImage: "stop.circle", description: Text("Avvia il container per leggere i log."))
+                ContentUnavailableView("Container not running", systemImage: "stop.circle", description: Text("Start the container to view logs."))
             } else if buffer.isEmpty, isStreamingLogs {
                 ProgressView()
             } else if buffer.isEmpty {
-                ContentUnavailableView("Nessun log", systemImage: "doc.text", description: Text("In attesa di output dal container."))
+                ContentUnavailableView("No logs", systemImage: "doc.text", description: Text("Waiting for container output."))
             } else {
                 HStack {
                     Toggle("Auto-scroll", isOn: $autoScroll)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
-                    Button("Pulisci") { clearLogs() }
+                    Button("Clear") { clearLogs() }
                 }
 
                 TerminalLogTextView(buffer: buffer, autoScroll: $autoScroll)

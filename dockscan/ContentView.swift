@@ -19,7 +19,7 @@ struct ContentView: View {
         .onChange(of: dockerService.errorMessage) { _, newValue in
             showingError = (newValue != nil)
         }
-        .alert("Errore", isPresented: $showingError) {
+        .alert("Error", isPresented: $showingError) {
             Button("OK", role: .cancel) { dockerService.clearError() }
         } message: {
             Text(dockerService.errorMessage ?? "")

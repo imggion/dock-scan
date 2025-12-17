@@ -23,7 +23,7 @@ public enum DockerBackend: String, CaseIterable, Identifiable {
         case .docker: return "Docker"
         case .colima: return "Colima"
         case .custom: return "Custom"
-        case .unavailable: return "Nessuno"
+        case .unavailable: return "None"
         }
     }
 
@@ -443,7 +443,7 @@ public final class DockerService: ObservableObject {
     }
 #endif
 
-    /// Determina quale backend è disponibile (Docker o Colima)
+    /// Determines which backend is available (Docker or Colima)
     public func detectBackend() {
         let fileManager = FileManager.default
         let home = Self.realUserHomeDirectory()
@@ -468,7 +468,7 @@ public final class DockerService: ObservableObject {
             if fileManager.fileExists(atPath: path) {
                 let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
                 let type = (try? fileManager.attributesOfItem(atPath: resolved)[.type] as? FileAttributeType) ?? nil
-                return "• [\(backend.displayName)] \(path) (tipo: \(type?.rawValue ?? "sconosciuto"))"
+                return "• [\(backend.displayName)] \(path) (type: \(type?.rawValue ?? "unknown"))"
             }
             return "✗ [\(backend.displayName)] \(path)"
         }
@@ -492,7 +492,7 @@ public final class DockerService: ObservableObject {
             backend = .custom
             resolvedSocketPath = socket
             socketPath = socket
-            logLines.append("Selezionato: Custom -> \(socket)")
+            logLines.append("Selected: Custom -> \(socket)")
             detectionLog = logLines.joined(separator: "\n")
             return
         }
@@ -501,7 +501,7 @@ public final class DockerService: ObservableObject {
             backend = .custom
             resolvedSocketPath = socket
             socketPath = socket
-            logLines.append("Selezionato: DOCKER_HOST -> \(socket)")
+            logLines.append("Selected: DOCKER_HOST -> \(socket)")
             detectionLog = logLines.joined(separator: "\n")
             return
         }
@@ -528,7 +528,7 @@ public final class DockerService: ObservableObject {
                 backend = candidateBackend
                 resolvedSocketPath = socket
                 socketPath = socket
-                logLines.append("Selezionato: \(candidateBackend.displayName) -> \(socket)")
+                logLines.append("Selected: \(candidateBackend.displayName) -> \(socket)")
                 detectionLog = logLines.joined(separator: "\n")
                 return
             }
@@ -537,7 +537,7 @@ public final class DockerService: ObservableObject {
         backend = .unavailable
         resolvedSocketPath = nil
         socketPath = nil
-        logLines.append("Selezionato: Nessuno")
+        logLines.append("Selected: None")
         detectionLog = logLines.joined(separator: "\n")
     }
 
@@ -604,7 +604,7 @@ public final class DockerService: ObservableObject {
     /// Esegue una chiamata HTTP via socket UNIX usando `curl` e restituisce body + status code.
     private func httpRequestViaUnixSocket(method: String, endpoint: String, body: Data? = nil) async throws -> (Data, Int) {
         guard let socket = resolvedSocketPath else {
-            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Socket non disponibile"])
+            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Socket unavailable"])
         }
         return try await httpRequestViaUnixSocket(socket: socket, method: method, endpoint: endpoint, body: body)
     }
@@ -672,7 +672,7 @@ public final class DockerService: ObservableObject {
             stderr.append(errPipe.fileHandleForReading.readDataToEndOfFile())
 
             if process.terminationStatus != 0 {
-                let errStr = String(data: stderr, encoding: .utf8) ?? "Errore sconosciuto"
+                let errStr = String(data: stderr, encoding: .utf8) ?? "Unknown error"
                 throw NSError(
                     domain: "DockerService",
                     code: Int(process.terminationStatus),
@@ -816,7 +816,7 @@ public final class DockerService: ObservableObject {
             Task { @MainActor in
                 await self.resolveBackend()
                 guard let socket = self.resolvedSocketPath else {
-                    continuation.finish(throwing: NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Socket non disponibile"]))
+                    continuation.finish(throwing: NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Socket unavailable"]))
                     return
                 }
 
@@ -895,7 +895,7 @@ public final class DockerService: ObservableObject {
     private func ensureBackendOrFail() async -> Bool {
         await resolveBackend()
         if backend == .unavailable {
-            self.errorMessage = "Nessun backend Docker/Colima disponibile"
+            self.errorMessage = "No Docker/Colima backend available"
             self.containers = []
             self.volumes = []
             self.images = []
@@ -908,7 +908,7 @@ public final class DockerService: ObservableObject {
     public func ping() async {
         await resolveBackend()
         guard resolvedSocketPath != nil else {
-            lastPing = "Socket non disponibile"
+            lastPing = "Socket unavailable"
             return
         }
         do {
@@ -1074,12 +1074,12 @@ public final class DockerService: ObservableObject {
 
     public func fetchContainerDetails(id: String) async throws -> DockerContainerDetails {
         guard await ensureBackendOrFail() else {
-            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend non disponibile"])
+            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend unavailable"])
         }
 
         let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: "/containers/\(id)/json")
         if status >= 400 {
-            let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+            let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
             throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
         }
 
@@ -1133,13 +1133,13 @@ public final class DockerService: ObservableObject {
 
     public func fetchContainerLogs(id: String, tail: Int = 500) async throws -> String {
         guard await ensureBackendOrFail() else {
-            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend non disponibile"])
+            throw NSError(domain: "DockerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Backend unavailable"])
         }
 
         let endpoint = "/containers/\(id)/logs?stdout=true&stderr=true&timestamps=true&tail=\(tail)"
         let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: endpoint)
         if status >= 400 {
-            let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+            let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
             throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
         }
 
@@ -1154,7 +1154,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: "/containers/json?all=true")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
 
@@ -1197,7 +1197,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: "/volumes")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
 
@@ -1231,7 +1231,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: "/images/json")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
 
@@ -1263,7 +1263,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "GET", endpoint: "/networks")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
 
@@ -1291,7 +1291,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (_, status) = try await httpRequestViaUnixSocket(method: "POST", endpoint: "/volumes/prune")
             if status >= 400 {
-                throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Errore Docker (\(status))"])
+                throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Docker error (\(status))"])
             }
             await fetchVolumes()
         } catch {
@@ -1316,7 +1316,7 @@ public final class DockerService: ObservableObject {
             for container in running {
                 let (_, status) = try await httpRequestViaUnixSocket(method: "POST", endpoint: "/containers/\(container.id)/kill")
                 if status >= 400 {
-                    throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Errore Docker (\(status)) durante kill"])
+                    throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Docker error (\(status)) during kill"])
                 }
             }
             await fetchContainers()
@@ -1331,7 +1331,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (_, status) = try await httpRequestViaUnixSocket(method: "POST", endpoint: "/containers/\(id)/\(action)")
             if status >= 400 {
-                throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Errore Docker (\(status)) durante \(action)"])
+                throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: "Docker error (\(status)) during \(action)"])
             }
             await fetchContainers()
         } catch {
@@ -1345,7 +1345,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "DELETE", endpoint: "/containers/\(id)?force=\(force ? "true" : "false")")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
             await fetchContainers()
@@ -1360,7 +1360,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "DELETE", endpoint: "/images/\(id)?force=\(force ? "true" : "false")")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
             await fetchImages()
@@ -1375,7 +1375,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "DELETE", endpoint: "/volumes/\(name)")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
             await fetchVolumes()
@@ -1390,7 +1390,7 @@ public final class DockerService: ObservableObject {
             self.errorMessage = nil
             let (data, status) = try await httpRequestViaUnixSocket(method: "DELETE", endpoint: "/networks/\(id)")
             if status >= 400 {
-                let msg = decodeDockerErrorMessage(from: data) ?? "Errore Docker (\(status))"
+                let msg = decodeDockerErrorMessage(from: data) ?? "Docker error (\(status))"
                 throw NSError(domain: "DockerService", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
             }
             await fetchNetworks()
@@ -1404,14 +1404,14 @@ public final class DockerService: ObservableObject {
     public func openContainerShellInTerminal(id: String) async {
         await resolveBackend()
         guard let socket = resolvedSocketPath else {
-            setErrorMessage("Socket Docker non disponibile")
+            setErrorMessage("Docker socket unavailable")
             return
         }
 
         let dockerHost = "unix://\(socket)"
         let safeID = id.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
         guard !safeID.isEmpty else {
-            setErrorMessage("ID container non valido")
+            setErrorMessage("Invalid container ID")
             return
         }
 
@@ -1439,14 +1439,14 @@ public final class DockerService: ObservableObject {
     public func openContainerAttachInTerminal(id: String) async {
         await resolveBackend()
         guard let socket = resolvedSocketPath else {
-            setErrorMessage("Socket Docker non disponibile")
+            setErrorMessage("Docker socket unavailable")
             return
         }
 
         let dockerHost = "unix://\(socket)"
         let safeID = id.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
         guard !safeID.isEmpty else {
-            setErrorMessage("ID container non valido")
+            setErrorMessage("Invalid container ID")
             return
         }
 
@@ -1482,7 +1482,7 @@ public final class DockerService: ObservableObject {
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fileURL.path)
             NSWorkspace.shared.open(fileURL)
         } catch {
-            setErrorMessage("Apri terminale fallito: \((error as NSError).localizedDescription)")
+            setErrorMessage("Failed to open Terminal: \((error as NSError).localizedDescription)")
         }
     }
 #endif

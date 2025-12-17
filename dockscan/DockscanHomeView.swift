@@ -157,7 +157,7 @@ struct DockscanHomeView: View {
                             }
                             if let allocated = info.memoryAllocatedBytes {
                                 HStack {
-                                    Text("Mem allocata")
+                                    Text("Allocated memory")
                                     Spacer()
                                     Text(memoryFormatter.string(fromByteCount: allocated))
                                 }
@@ -165,7 +165,7 @@ struct DockscanHomeView: View {
                                 .foregroundStyle(.secondary)
                             }
                         } else {
-                            Text("Caricamento…")
+                            Text("Loading…")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -225,13 +225,13 @@ struct DockscanHomeView: View {
             ContainerLogsSheet(containerID: item.id)
                 .environmentObject(dockerService)
         }
-        .alert("Eseguire Prune Volumi?", isPresented: $showingPruneVolumesConfirm) {
-            Button("Annulla", role: .cancel) {}
+        .alert("Prune volumes?", isPresented: $showingPruneVolumesConfirm) {
+            Button("Cancel", role: .cancel) {}
             Button("Prune", role: .destructive) {
                 Task { await dockerService.pruneVolumes() }
             }
         } message: {
-            Text("Rimuove tutti i volumi non utilizzati.")
+            Text("Removes all unused volumes.")
         }
         .task {
             await refresh(initial: true)
@@ -265,7 +265,7 @@ struct DockscanHomeView: View {
                let container = dockerService.containers.first(where: { $0.id == selectedContainerID }) {
                 ContainerDetailView(container: container)
             } else {
-                NoSelectionView(title: "Nessun container selezionato", systemImage: "shippingbox")
+                NoSelectionView(title: "No container selected", systemImage: "shippingbox")
             }
         case .stacks:
             let groups = dockerService.containers.groupedByStack()
@@ -280,28 +280,28 @@ struct DockscanHomeView: View {
                     }
                 }
             } else {
-                NoSelectionView(title: "Nessuno stack selezionato", systemImage: "square.stack.3d.up.fill")
+                NoSelectionView(title: "No stack selected", systemImage: "square.stack.3d.up.fill")
             }
         case .images:
             if let selectedImageID,
                let image = dockerService.images.first(where: { $0.id == selectedImageID }) {
                 ImageDetailView(image: image, byteFormatter: byteFormatter)
             } else {
-                NoSelectionView(title: "Nessuna immagine selezionata", systemImage: "server.rack")
+                NoSelectionView(title: "No image selected", systemImage: "server.rack")
             }
         case .volumes:
             if let selectedVolumeID,
                let volume = dockerService.volumes.first(where: { $0.id == selectedVolumeID }) {
                 VolumeDetailView(volume: volume)
             } else {
-                NoSelectionView(title: "Nessun volume selezionato", systemImage: "internaldrive")
+                NoSelectionView(title: "No volume selected", systemImage: "internaldrive")
             }
         case .networks:
             if let selectedNetworkID,
                let network = dockerService.networks.first(where: { $0.id == selectedNetworkID }) {
                 NetworkDetailView(network: network)
             } else {
-                NoSelectionView(title: "Nessun network selezionato", systemImage: "network")
+                NoSelectionView(title: "No network selected", systemImage: "network")
             }
         }
     }
@@ -312,7 +312,7 @@ struct DockscanHomeView: View {
             Button {
                 Task { await refresh(initial: false) }
             } label: {
-                Label("Aggiorna", systemImage: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
             }
 
             if section == .volumes {
@@ -329,15 +329,15 @@ struct DockscanHomeView: View {
         Group {
             if dockerService.backend == .unavailable {
                 ContentUnavailableView(
-                    "Backend non disponibile",
+                    "Backend unavailable",
                     systemImage: "externaldrive.badge.xmark",
-                    description: Text("Avvia Docker Desktop o Colima e riprova.")
+                    description: Text("Start Docker Desktop or Colima and try again.")
                 )
             } else if dockerService.containers.isEmpty {
                 ContentUnavailableView(
-                    "Nessun container",
+                    "No containers",
                     systemImage: "shippingbox",
-                    description: Text("Tocca Aggiorna per recuperare i container.")
+                    description: Text("Press Refresh to fetch containers.")
                 )
             } else {
                 Table(dockerService.containers, selection: $selectedContainerID) {
@@ -425,15 +425,15 @@ struct DockscanHomeView: View {
         return Group {
             if dockerService.backend == .unavailable {
                 ContentUnavailableView(
-                    "Backend non disponibile",
+                    "Backend unavailable",
                     systemImage: "externaldrive.badge.xmark",
-                    description: Text("Avvia Docker Desktop o Colima e riprova.")
+                    description: Text("Start Docker Desktop or Colima and try again.")
                 )
             } else if groups.isEmpty {
                 ContentUnavailableView(
-                    "Nessuno stack",
+                    "No stacks",
                     systemImage: "square.stack.3d.up.fill",
-                    description: Text("Nessuno stack Compose/Swarm trovato nei container correnti.")
+                    description: Text("No Compose/Swarm stacks found in the current containers.")
                 )
             } else {
                 Table(groups, selection: $selectedStackID) {
@@ -485,15 +485,15 @@ struct DockscanHomeView: View {
         Group {
             if dockerService.backend == .unavailable {
                 ContentUnavailableView(
-                    "Backend non disponibile",
+                    "Backend unavailable",
                     systemImage: "externaldrive.badge.xmark",
-                    description: Text("Avvia Docker Desktop o Colima e riprova.")
+                    description: Text("Start Docker Desktop or Colima and try again.")
                 )
             } else if dockerService.images.isEmpty {
                 ContentUnavailableView(
-                    "Nessuna immagine",
+                    "No images",
                     systemImage: "server.rack",
-                    description: Text("Tocca Aggiorna per recuperare le immagini.")
+                    description: Text("Press Refresh to fetch images.")
                 )
             } else {
                 Table(dockerService.images, selection: $selectedImageID) {
@@ -571,15 +571,15 @@ struct DockscanHomeView: View {
         Group {
             if dockerService.backend == .unavailable {
                 ContentUnavailableView(
-                    "Backend non disponibile",
+                    "Backend unavailable",
                     systemImage: "externaldrive.badge.xmark",
-                    description: Text("Avvia Docker Desktop o Colima e riprova.")
+                    description: Text("Start Docker Desktop or Colima and try again.")
                 )
             } else if dockerService.volumes.isEmpty {
                 ContentUnavailableView(
-                    "Nessun volume",
+                    "No volumes",
                     systemImage: "internaldrive",
-                    description: Text("Tocca Aggiorna per recuperare i volumi.")
+                    description: Text("Press Refresh to fetch volumes.")
                 )
             } else {
                 Table(dockerService.volumes, selection: $selectedVolumeID) {
@@ -646,15 +646,15 @@ struct DockscanHomeView: View {
         Group {
             if dockerService.backend == .unavailable {
                 ContentUnavailableView(
-                    "Backend non disponibile",
+                    "Backend unavailable",
                     systemImage: "externaldrive.badge.xmark",
-                    description: Text("Avvia Docker Desktop o Colima e riprova.")
+                    description: Text("Start Docker Desktop or Colima and try again.")
                 )
             } else if dockerService.networks.isEmpty {
                 ContentUnavailableView(
-                    "Nessun network",
+                    "No networks",
                     systemImage: "network",
-                    description: Text("Tocca Aggiorna per recuperare i network.")
+                    description: Text("Press Refresh to fetch networks.")
                 )
             } else {
                 Table(dockerService.networks, selection: $selectedNetworkID) {
@@ -757,43 +757,43 @@ struct DockscanHomeView: View {
         Button("Logs") { logsSheetContainer = LogsSheetItem(id: container.id) }
             .disabled(!container.isRunning)
         Divider()
-        Button("Rimuovi", role: .destructive) {
+        Button("Remove", role: .destructive) {
             Task { await dockerService.removeContainer(id: container.id, force: true) }
         }
     }
 
     @ViewBuilder
     private func imageContextMenu(_ image: DockerImage) -> some View {
-        Button("Dettagli") {
+        Button("Details") {
             selectedImageID = image.id
             columnVisibility = .all
         }
         Divider()
-        Button("Rimuovi", role: .destructive) {
+        Button("Remove", role: .destructive) {
             Task { await dockerService.removeImage(id: image.id, force: false) }
         }
     }
 
     @ViewBuilder
     private func volumeContextMenu(_ volume: DockerVolume) -> some View {
-        Button("Dettagli") {
+        Button("Details") {
             selectedVolumeID = volume.id
             columnVisibility = .all
         }
         Divider()
-        Button("Rimuovi", role: .destructive) {
+        Button("Remove", role: .destructive) {
             Task { await dockerService.removeVolume(name: volume.name) }
         }
     }
 
     @ViewBuilder
     private func networkContextMenu(_ network: DockerNetwork) -> some View {
-        Button("Dettagli") {
+        Button("Details") {
             selectedNetworkID = network.id
             columnVisibility = .all
         }
         Divider()
-        Button("Rimuovi", role: .destructive) {
+        Button("Remove", role: .destructive) {
             Task { await dockerService.removeNetwork(id: network.id) }
         }
     }
@@ -843,7 +843,7 @@ private struct StackDetailView: View {
         .navigationTitle(group.name)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("Sezione", selection: $selectedTab) {
+                Picker("Section", selection: $selectedTab) {
                     Text("Info").tag(Tab.info)
                     Text("Logs").tag(Tab.logs)
                 }
@@ -897,7 +897,7 @@ private struct StackDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Menu("Azioni") {
+                        Menu("Actions") {
                             if container.isRunning {
                                 Button("Stop") { Task { await dockerService.stopContainer(id: container.id) } }
                                 Button("Restart") { Task { await dockerService.restartContainer(id: container.id) } }
@@ -910,7 +910,7 @@ private struct StackDetailView: View {
                         Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: container.id) } }
                             .disabled(!container.isRunning)
                         Divider()
-                        Button("Apri Dettagli") { onSelectContainer(container.id) }
+                        Button("Open Details") { onSelectContainer(container.id) }
                     }
                 }
             }
@@ -985,7 +985,7 @@ private struct ContainerLogsSheet: View {
                     .disabled(isStreaming)
                 Button("Attach") { Task { await dockerService.openContainerAttachInTerminal(id: containerID) } }
                     .disabled(isStreaming)
-                Button("Pulisci") { clear() }
+                Button("Clear") { clear() }
             }
 
             if let error {
@@ -1141,7 +1141,7 @@ private struct StackLogsView: View {
                 Toggle("Auto-scroll", isOn: $autoScroll)
                     .toggleStyle(.switch)
                     .controlSize(.small)
-                Button("Pulisci") { clear() }
+                Button("Clear") { clear() }
             }
 
             if let error {
@@ -1152,9 +1152,9 @@ private struct StackLogsView: View {
 
             if runningContainers.isEmpty {
                 ContentUnavailableView(
-                    "Stack non in esecuzione",
+                    "Stack not running",
                     systemImage: "square.stack.3d.up.fill",
-                    description: Text("Avvia almeno un container dello stack per vedere i log.")
+                    description: Text("Start at least one container in the stack to view logs.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

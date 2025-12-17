@@ -9,15 +9,15 @@ struct VolumesView: View {
             Group {
                 if dockerService.backend == .unavailable {
                     ContentUnavailableView(
-                        "Backend non disponibile",
+                        "Backend unavailable",
                         systemImage: "externaldrive.badge.xmark",
-                        description: Text("Avvia Docker Desktop o Colima e riprova.")
+                        description: Text("Start Docker Desktop or Colima and try again.")
                     )
                 } else if dockerService.volumes.isEmpty {
                     ContentUnavailableView(
-                        "Nessun volume",
+                        "No volumes",
                         systemImage: "externaldrive",
-                        description: Text("Tocca Aggiorna per recuperare i volumi.")
+                        description: Text("Press Refresh to fetch volumes.")
                     )
                 } else {
                     List(dockerService.volumes) { volume in
@@ -33,13 +33,13 @@ struct VolumesView: View {
                             Text(volume.mountpoint)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
-                            Text("Creato: \(volume.createdAt)")
+                            Text("Created: \(volume.createdAt)")
                                 .font(.footnote)
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(.vertical, 4)
                         .contextMenu {
-                            Button("Rimuovi", role: .destructive) {
+                            Button("Remove", role: .destructive) {
                                 Task { await dockerService.removeVolume(name: volume.name) }
                             }
                         }
@@ -51,7 +51,7 @@ struct VolumesView: View {
 #endif
                 }
             }
-            .navigationTitle("Volumi Docker")
+            .navigationTitle("Docker Volumes")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -60,7 +60,7 @@ struct VolumesView: View {
                         if isRefreshing {
                             ProgressView()
                         } else {
-                            Label("Aggiorna", systemImage: "arrow.clockwise")
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
                     }
                     .disabled(isRefreshing)

@@ -10,15 +10,15 @@ struct NetworksView: View {
             Group {
                 if dockerService.backend == .unavailable {
                     ContentUnavailableView(
-                        "Backend non disponibile",
+                        "Backend unavailable",
                         systemImage: "externaldrive.badge.xmark",
-                        description: Text("Avvia Docker Desktop o Colima e riprova.")
+                        description: Text("Start Docker Desktop or Colima and try again.")
                     )
                 } else if dockerService.networks.isEmpty {
                     ContentUnavailableView(
-                        "Nessun network",
+                        "No networks",
                         systemImage: "point.3.connected.trianglepath.dotted",
-                        description: Text("Tocca Aggiorna per recuperare i network.")
+                        description: Text("Press Refresh to fetch networks.")
                     )
                 } else {
                     List(dockerService.networks, selection: $selection) { network in
@@ -32,7 +32,7 @@ struct NetworksView: View {
                             .padding(.vertical, 4)
                         }
                         .contextMenu {
-                            Button("Rimuovi", role: .destructive) {
+                            Button("Remove", role: .destructive) {
                                 Task { await dockerService.removeNetwork(id: network.id) }
                             }
                         }
@@ -48,7 +48,7 @@ struct NetworksView: View {
                         if isRefreshing {
                             ProgressView()
                         } else {
-                            Label("Aggiorna", systemImage: "arrow.clockwise")
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
                     }
                     .disabled(isRefreshing)
@@ -62,7 +62,7 @@ struct NetworksView: View {
                let network = dockerService.networks.first(where: { $0.id == selection }) {
                 NetworkDetailView(network: network)
             } else {
-                ContentUnavailableView("Seleziona un network", systemImage: "point.3.connected.trianglepath.dotted", description: nil)
+                ContentUnavailableView("Select a network", systemImage: "point.3.connected.trianglepath.dotted", description: nil)
             }
         }
     }
@@ -107,7 +107,7 @@ struct NetworkDetailView: View {
                 Button(role: .destructive) {
                     Task { await dockerService.removeNetwork(id: network.id) }
                 } label: {
-                    Label("Rimuovi", systemImage: "trash")
+                    Label("Remove", systemImage: "trash")
                 }
             }
         }

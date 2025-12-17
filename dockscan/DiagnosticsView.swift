@@ -8,9 +8,9 @@ struct DiagnosticsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Diagnostica socket").font(.headline)
+                Text("Socket diagnostics").font(.headline)
                 Spacer()
-                Button("Rileva di nuovo") { Task { await dockerService.resolveBackend() } }
+                Button("Detect again") { Task { await dockerService.resolveBackend() } }
             }
 
             GroupBox {
@@ -33,13 +33,13 @@ struct DiagnosticsView: View {
             }
 
             HStack {
-                Button("Scegli socket…") { pickSocket() }
+                Button("Choose socket…") { pickSocket() }
                 Button("Reset custom") { dockerService.setCustomSocketURL(nil) }
                 Button("Ping") { Task { await dockerService.ping() } }
                 Spacer()
             }
 
-            Text("Il socket viene rilevato automaticamente (priorità: `DOCKER_HOST` → Colima → Docker). Se vuoi re-introdurre App Sandbox, dovrai gestire l’accesso file con “Scegli socket…”.")
+            Text("The socket is detected automatically (priority: `DOCKER_HOST` → Colima → Docker). If you want to re-enable App Sandbox, you’ll need to manage file access via “Choose socket…”.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -53,8 +53,8 @@ struct DiagnosticsView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        panel.title = "Seleziona docker.sock"
-        panel.message = "Seleziona il socket (es. ~/.colima/default/docker.sock)."
+        panel.title = "Select docker.sock"
+        panel.message = "Select the socket (e.g., ~/.colima/default/docker.sock)."
         panel.allowedFileTypes = ["sock"]
         panel.showsHiddenFiles = true
 

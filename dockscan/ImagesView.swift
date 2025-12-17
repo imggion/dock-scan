@@ -17,15 +17,15 @@ struct ImagesView: View {
             Group {
                 if dockerService.backend == .unavailable {
                     ContentUnavailableView(
-                        "Backend non disponibile",
+                        "Backend unavailable",
                         systemImage: "externaldrive.badge.xmark",
-                        description: Text("Avvia Docker Desktop o Colima e riprova.")
+                        description: Text("Start Docker Desktop or Colima and try again.")
                     )
                 } else if dockerService.images.isEmpty {
                     ContentUnavailableView(
-                        "Nessuna immagine",
+                        "No images",
                         systemImage: "shippingbox",
-                        description: Text("Tocca Aggiorna per recuperare le immagini.")
+                        description: Text("Press Refresh to fetch images.")
                     )
                 } else {
                     List(dockerService.images, selection: $selection) { image in
@@ -45,14 +45,14 @@ struct ImagesView: View {
                             .padding(.vertical, 4)
                         }
                         .contextMenu {
-                            Button("Rimuovi", role: .destructive) {
+                            Button("Remove", role: .destructive) {
                                 Task { await dockerService.removeImage(id: image.id, force: false) }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Immagini")
+            .navigationTitle("Images")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -61,7 +61,7 @@ struct ImagesView: View {
                         if isRefreshing {
                             ProgressView()
                         } else {
-                            Label("Aggiorna", systemImage: "arrow.clockwise")
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
                     }
                     .disabled(isRefreshing)
@@ -75,7 +75,7 @@ struct ImagesView: View {
                let image = dockerService.images.first(where: { $0.id == selection }) {
                 ImageDetailView(image: image, byteFormatter: byteFormatter)
             } else {
-                ContentUnavailableView("Seleziona un'immagine", systemImage: "shippingbox", description: nil)
+                ContentUnavailableView("Select an image", systemImage: "shippingbox", description: nil)
             }
         }
     }
@@ -111,9 +111,9 @@ struct ImageDetailView: View {
 
             Divider()
 
-            LabeledContent("Dimensione") { Text(byteFormatter.string(fromByteCount: image.sizeBytes)) }
+            LabeledContent("Size") { Text(byteFormatter.string(fromByteCount: image.sizeBytes)) }
             if let date = image.createdAt {
-                LabeledContent("Creato") { Text(date.formatted(date: .complete, time: .omitted)) }
+                LabeledContent("Created") { Text(date.formatted(date: .complete, time: .omitted)) }
             }
             LabeledContent("ID") { Text(image.id).textSelection(.enabled).font(.caption) }
 
@@ -125,7 +125,7 @@ struct ImageDetailView: View {
                 Button(role: .destructive) {
                     Task { await dockerService.removeImage(id: image.id, force: false) }
                 } label: {
-                    Label("Rimuovi", systemImage: "trash")
+                    Label("Remove", systemImage: "trash")
                 }
             }
         }
